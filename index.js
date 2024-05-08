@@ -17,8 +17,6 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
-console.log(process.env.DB_USER);
-
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hzcboi3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -36,15 +34,16 @@ const logger = async (req, res, next) => {
   next();
 };
 
-const verifyToken = async (req, res, next) => {
-  const token = req.cookies?.token;
+const verifyToken = (req, res, next) => {
+  const token = req?.cookies?.token;
+  console.log("hello token", req.cookies);
   if (!token) {
     return res.status(401).send({ message: "Not authorized" });
   }
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     // error
     if (err) {
-      return res.status(401).send({ message: "unothurized" });
+      return res.status(401).send({ message: "unauthorized" });
     }
     // if token is valid then it would be decoded
     console.log("value in the token", decoded);
@@ -68,22 +67,23 @@ async function run() {
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: "1h",
       });
-      res 
+      res
         .cookie("token", token, {
+          // httpOnly: true,
+          // secure: false,
+          // sameSite: "none",
+
           httpOnly: true,
-          secure: false,
-          sameSite: "none",
+          secure: process.env.NODE_ENV === "production",
+          sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
         })
         .send({ success: true });
     });
 
-  
-    app.post('/logout', async (req, res)=>{
+    app.post("/logout", async (req, res) => {
       const user = req.body;
-      res.clearCookie('token' , {maxAge: 0}).send({success: true})
-    })
-
-
+      res.clearCookie("token", { maxAge: 0 }).send({ success: true });
+    });
 
     // services related api
     app.get("/services", logger, async (req, res) => {
@@ -109,7 +109,7 @@ async function run() {
 
     app.get("/bookings", logger, verifyToken, async (req, res) => {
       if (req.query.email !== req.user.email) {
-        return res.status(403).send({message: 'forbidden access'})
+        return res.status(403).send({ message: "forbidden access" });
       }
 
       let query = {};
